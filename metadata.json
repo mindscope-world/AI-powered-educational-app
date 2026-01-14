@@ -1,0 +1,7 @@
+{
+  "name": "Zinara",
+  "description": "A premium, high-end immersive learning platform with AI-powered summaries, interactive modules, and community features.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
