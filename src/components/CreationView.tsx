@@ -18,10 +18,12 @@ const CreationView: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [visualReference, setVisualReference] = useState<string | null>(null);
+  const [visualType, setVisualType] = useState<'image' | 'video' | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [config, setConfig] = useState<StudioConfig>({
     resolution: '720p',
@@ -34,7 +36,9 @@ const CreationView: React.FC = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imgInputRef = useRef<HTMLInputElement>(null);
+  const visualInputRef = useRef<HTMLInputElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
 
   const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -44,12 +48,14 @@ const CreationView: React.FC = () => {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVisualReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const type = file.type.startsWith('video/') ? 'video' : 'image';
+      setVisualType(type);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+        setVisualReference(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -107,9 +113,9 @@ const CreationView: React.FC = () => {
       let operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt: prompt,
-        image: imagePreview ? {
-          imageBytes: imagePreview.split(',')[1],
-          mimeType: imagePreview.split(';')[0].split(':')[1]
+        image: (visualReference && visualType === 'image') ? {
+          imageBytes: (visualReference as string).split(',')[1],
+          mimeType: (visualReference as string).split(';')[0].split(':')[1]
         } : undefined,
         config: {
           numberOfVideos: 1,
@@ -149,12 +155,21 @@ const CreationView: React.FC = () => {
 
     if (isAudioPlaying) {
       audioService.stop();
+      if (visualType === 'video' && previewVideoRef.current) {
+        previewVideoRef.current.pause();
+      }
       setIsAudioPlaying(false);
       setStatusMessage("Audio stopped.");
       return;
     }
 
     try {
+      if (visualType === 'video' && previewVideoRef.current) {
+        previewVideoRef.current.currentTime = 0;
+        previewVideoRef.current.play();
+      }
+      setIsAudioPlaying(true);
+      setStatusMessage("Synthesizing audio lesson...");
       await audioService.speak(content, {
         language: config.language,
         model: config.audioModel
@@ -165,6 +180,23 @@ const CreationView: React.FC = () => {
       setStatusMessage("Audio synthesis failed.");
     } finally {
       setIsAudioPlaying(false);
+      if (visualType === 'video' && previewVideoRef.current) {
+        previewVideoRef.current.pause();
+      }
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!fullscreenContainerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      fullscreenContainerRef.current.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
     }
   };
 
@@ -372,14 +404,18 @@ const CreationView: React.FC = () => {
           <div className="flex flex-col gap-3">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Visual Direction</h3>
             <div
-              onClick={() => imgInputRef.current?.click()}
+              onClick={() => visualInputRef.current?.click()}
               className="group relative h-32 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all overflow-hidden"
             >
-              {imagePreview ? (
+              {visualReference ? (
                 <>
-                  <img src={imagePreview} className="w-full h-full object-cover opacity-80" alt="Reference" />
+                  {visualType === 'video' ? (
+                    <video src={visualReference} className="w-full h-full object-cover opacity-80" muted />
+                  ) : (
+                    <img src={visualReference} className="w-full h-full object-cover opacity-80" alt="Reference" />
+                  )}
                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-white text-[10px] font-bold uppercase">Change Image</span>
+                    <span className="text-white text-[10px] font-bold uppercase">Change Visual</span>
                   </div>
                 </>
               ) : (
@@ -390,7 +426,7 @@ const CreationView: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Style Reference</span>
                 </div>
               )}
-              <input type="file" ref={imgInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+              <input type="file" ref={visualInputRef} onChange={handleVisualReferenceUpload} accept="image/*,video/*" className="hidden" />
             </div>
           </div>
 
@@ -435,16 +471,75 @@ const CreationView: React.FC = () => {
           <div className="w-full max-w-4xl flex flex-col gap-6">
             <div className="flex justify-between items-baseline px-2">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Studio Preview</h2>
-              {videoUrl && <span className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Live Rendering</span>}
+              {isAudioPlaying && <span className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Audio Lesson Demo</span>}
             </div>
 
-            <div className={`aspect-video bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-slate-200 relative overflow-hidden group transition-all duration-500 ${config.aspectRatio === '9:16' ? 'max-h-[70vh] aspect-[9/16] mx-auto' : ''}`}>
-              {videoUrl ? (
+            <div
+              ref={fullscreenContainerRef}
+              className={`aspect-video bg-white rounded-[2rem] border border-slate-100 shadow-2xl shadow-slate-200 relative overflow-hidden group transition-all duration-500 ${config.aspectRatio === '9:16' ? 'max-h-[70vh] aspect-[9/16] mx-auto' : ''} ${isFullscreen ? 'w-screen h-screen rounded-none z-[100]' : ''}`}
+            >
+              {visualReference ? (
+                <div className="w-full h-full relative">
+                  {visualType === 'video' ? (
+                    <video
+                      ref={previewVideoRef}
+                      src={visualReference}
+                      className="w-full h-full object-cover"
+                      loop
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <img src={visualReference} className="w-full h-full object-cover" alt="Visual Reference" />
+                  )}
+
+                  {/* Overlay Controls */}
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                    <button
+                      onClick={handleAudioGeneration}
+                      className="w-16 h-16 bg-white/90 text-indigo-600 rounded-full flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all"
+                    >
+                      {isAudioPlaying ? (
+                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                      ) : (
+                        <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={toggleFullscreen}
+                      className="absolute bottom-6 right-6 p-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all"
+                      title={isFullscreen ? "Exit Fullscreen" : "Maximize"}
+                    >
+                      {isFullscreen ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 0l5-5m0 0l-5 0m5 0l0 5m-5 11l5 5m0 0l-5 0m5 0l0-5m-11 0l-5 5m0 0l5 0m-5 0l0-5" strokeWidth={2} /></svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" strokeWidth={2} /></svg>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Visual Feedback Overlays */}
+                  {isAudioPlaying && (
+                    <div className="absolute bottom-12 left-0 right-0 flex justify-center items-center gap-1.5 opacity-60">
+                      {[...Array(20)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-1 bg-white rounded-full animate-[pulse_0.4s_infinite]"
+                          style={{
+                            height: `${Math.random() * 30 + 10}px`,
+                            animationDelay: `${i * 0.05}s`
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : videoUrl ? (
                 <>
                   <video key={videoUrl} controls autoPlay className="w-full h-full object-cover">
                     <source src={videoUrl} type="video/mp4" />
                   </video>
-                  {/* Quick Download Overlay Button */}
                   <button
                     onClick={handleDownload}
                     className="absolute top-6 right-6 p-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20"
@@ -476,7 +571,7 @@ const CreationView: React.FC = () => {
                         <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" strokeWidth={2} /><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2} /></svg>
                       </div>
                       <h3 className="text-lg font-bold text-slate-700 mb-2">Awaiting Architect Input</h3>
-                      <p className="text-xs text-slate-400 max-w-sm">Provide content on the left to generate an immersive educational masterclass visual. ({config.resolution}, {config.visualStyle} style)</p>
+                      <p className="text-xs text-slate-400 max-w-sm">Provide content on the left and upload a visual reference to preview your masterclass assets. ({config.resolution}, {config.visualStyle} style)</p>
                     </>
                   )}
                 </div>
