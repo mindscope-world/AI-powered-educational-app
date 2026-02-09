@@ -9,13 +9,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.34.0",
+    "@google/genai": "^1.35.0",
+    "dotenv": "^17.2.4",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "@google/genai": "^1.35.0"
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss7-compat": "^2.2.17",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^9.8.8",
+    "postcss": "^7.0.39",
+    "postcss-import": "^12.0.1",
+    "postcss-nested": "4.2.3",
+    "tailwindcss": "npm:@tailwindcss/postcss7-compat",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

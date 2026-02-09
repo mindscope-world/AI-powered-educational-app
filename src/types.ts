@@ -18,6 +18,9 @@ export interface Course {
     bio: string;
   };
   chapters: Lesson[];
+  language?: string;
+  learnerLevel?: string;
+  audioModel?: 'browser' | 'elevenlabs';
 }
 
 export interface Comment {

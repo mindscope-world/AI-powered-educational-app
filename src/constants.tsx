@@ -17,7 +17,9 @@ export const MOCK_COURSES: Course[] = [
       { id: '3', title: 'Fundamentals of Web Design', duration: '22:10', isCompleted: false, isLocked: false, content: 'Deep dive into grids and typography.' },
       { id: '4', title: 'Improving Visual Skills', duration: '18:05', isCompleted: false, isLocked: true, content: 'Visual exercises.' },
       { id: '5', title: 'Finding inspiration', duration: '10:30', isCompleted: false, isLocked: true, content: 'Curating your feed.' },
-    ]
+    ],
+    language: 'English',
+    audioModel: 'browser'
   },
   {
     id: 'intro-to-ai',
